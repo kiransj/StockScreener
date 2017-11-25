@@ -65,15 +65,20 @@ namespace StockMarket
         [Required]
         public float prevClose { get; set;}
         [Required]
-        public float totalTradedQty { get; set;}
+        public long totalTradedQty { get; set;}
         [Required]
         public float totalTradedValue { get; set;}
         [Required]
         public DateTime date{get; set;}
         [Required]
-        public int totalTrades { get; set;}
+        public long totalTrades { get; set;}
         [Required]
         public string isinNumber{get; set;}
+        [Required]
+        public long deliverableQty { get; set;}
+        [Required]
+        public float deliveryPercentage { get; set; }
+
     }
 
     class CsvDailyStockDataMapping : CsvMapping<DailyStockData>
@@ -93,6 +98,32 @@ namespace StockMarket
             MapProperty(10, x => x.date);
             MapProperty(11, x => x.totalTrades);
             MapProperty(12, x => x.isinNumber);
+        }
+    }
+
+
+    class DailyStockDeliveryPosition
+    {
+        public int record { get; set; }
+        public int serialNumber { get; set; }
+        public string symbol { get; set; }
+        public string series {get; set; }
+        public long qtyTraded { get; set;}
+        public long deliverableQty { get; set; }
+        public float deliveryPercentage { get; set; }
+    }
+
+    class CsvDailyStockDeviveryPositionMapping : CsvMapping<DailyStockDeliveryPosition>
+    {
+        public CsvDailyStockDeviveryPositionMapping() : base()
+        {
+            MapProperty(0, x => x.record);
+            MapProperty(1, x => x.serialNumber);
+            MapProperty(2, x => x.symbol);
+            MapProperty(3, x => x.series);
+            MapProperty(4, x => x.qtyTraded);
+            MapProperty(5, x => x.deliverableQty);
+            MapProperty(6, x => x.deliveryPercentage);
         }
     }
 
@@ -125,7 +156,8 @@ namespace StockMarket
             return result;
         }
 
-        static public List<DailyStockData> parseDailyStockDataFromCSV(string csvFile)
+        // Parse the closing price for all the stock for a given day
+        static public List<DailyStockData> parseBhavFile(string csvFile)
         {
             string filename = csvFile;
             CsvParserOptions csvParserOptions = new CsvParserOptions(true, ',');
@@ -138,6 +170,51 @@ namespace StockMarket
                 .ToList();
 
             return result;
+        }
+
+        // parse the deliverables volumes and percentables for a given day
+        static public List<DailyStockDeliveryPosition> parseMTOFile(string csvFile)
+        {
+            string filename = csvFile;
+            CsvParserOptions csvParserOptions = new CsvParserOptions(true, ',');
+            CsvDailyStockDeviveryPositionMapping csvMapper = new CsvDailyStockDeviveryPositionMapping();
+            CsvParser<DailyStockDeliveryPosition> csvParser = new CsvParser<DailyStockDeliveryPosition>(csvParserOptions, csvMapper);
+
+            var result = csvParser
+                .ReadFromFile(filename, Encoding.ASCII)
+                .Select(x => x.Result)
+                .ToList();
+
+            return result;
+        }
+
+        static public List<DailyStockData> parseDailyStockInformation(string bhavFile, string mtoFile)
+        {
+            var stockPrices = NseStockMarket.parseBhavFile(bhavFile);
+            var deliverablesQty = NseStockMarket.parseMTOFile(mtoFile);
+
+            foreach(var stock in stockPrices)
+            {
+                if(stock.series == "BE")
+                {
+                    // In BE series all the trades will be delivered
+                    stock.deliverableQty = stock.totalTradedQty;
+                    stock.deliveryPercentage = 100;
+                }
+                else
+                {
+                    var results = deliverablesQty.Where(x => x.series == stock.series && x.symbol == stock.symbol && x.qtyTraded == stock.totalTradedQty).ToList();
+
+                    if(results.Count >= 1)
+                    {
+                        var res = results.First();
+                        stock.deliverableQty = res.deliverableQty;
+                        stock.deliveryPercentage = res.deliveryPercentage;
+                    }
+                }
+            }
+
+            return stockPrices;
         }
     }
 }
