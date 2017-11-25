@@ -7,6 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using TinyCsvParser;
 using TinyCsvParser.Mapping;
 
+
+using StockMarket;
+using System.IO;
+
 /*
     Help: https://docs.microsoft.com/en-us/ef/core/get-started/netcore/new-db-sqlite
 
@@ -23,101 +27,64 @@ using TinyCsvParser.Mapping;
 
 namespace screener
 {
-    public class CompanyInformation
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }
-        [Required]
-        public string symbol {get; set;}
-        [Required]
-        public string companyName{get; set;}
-        [Required]
-        public string series{get; set;}
-        [Required]
-        public DateTime dateOfListing{get; set;}
-        public float paidUpvalue {get; set;}
-        public int marketLot {get; set;}
-        [Required]
-        public string isinNumber{get; set;}
-        public float faceValue{get; set;}
-    }
-
-    public class stockData
-    {
-        public string symbol  {get; set;}
-        public string series  {get; set;}
-        public float open { get; set;}
-        public float high { get; set;}
-        public float low { get; set;}
-        public float close { get; set;}
-        public float lastPrice { get; set;}
-        public float prevPrice { get; set;}
-        public float totalTradedQty { get; set;}
-        public float totalTradedValue { get; set;}
-        public DateTime date{get; set;}
-
-        public int totalTrades { get; set;}
-        public string isinNumber{get; set;}
-    }
-
-    public class CsvCompanyMapping : CsvMapping<CompanyInformation>
-    {
-        public CsvCompanyMapping() : base()
-        {
-            MapProperty(0, x => x.symbol);
-            MapProperty(1, x => x.companyName);
-            MapProperty(2, x => x.series);
-            MapProperty(3, x => x.dateOfListing);
-            MapProperty(4, x => x.paidUpvalue);
-            MapProperty(5, x => x.marketLot);
-            MapProperty(6, x => x.isinNumber);
-            MapProperty(7, x => x.faceValue);
-        }
-    }
-
     public class DataContext : DbContext
     {
         public DbSet<CompanyInformation> companyInformation { get; set; }
-
+        public DbSet<DailyStockData> stockData { get; set; }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder.UseSqlite("Data Source=data.db");
             optionsBuilder.EnableSensitiveDataLogging(true);
         }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CompanyInformation>()
+                .HasIndex(x => new { x.symbol, x.isinNumber} );
+            modelBuilder.Entity<CompanyInformation>()
+                .HasKey(x => new { x.symbol, x.series, x.isinNumber});
+
+            modelBuilder.Entity<DailyStockData>()
+                .HasIndex(x => new { x.symbol, x.isinNumber, x.date } );
+
+            modelBuilder.Entity<DailyStockData>()
+                .HasKey(x => new { x.isinNumber, x.date, x.series});
+        }
     }
     class Program
     {
-        static void Main(string[] args)
+        static void loadCompaniesInformation()
         {
-            CsvParserOptions csvParserOptions = new CsvParserOptions(true, ',');
-            CsvCompanyMapping csvMapper = new CsvCompanyMapping();
-            CsvParser<CompanyInformation> csvParser = new CsvParser<CompanyInformation>(csvParserOptions, csvMapper);
-            var result = csvParser
-                .ReadFromFile(@"data/nse.csv", Encoding.ASCII)
-                .ToList();
+            var result = NseStockMarket.parseListOfCompaniesFromCSV(@"data/nse.csv");
 
-#if false
             using (var db = new DataContext())
             {
                 foreach(var item in result)
                 {
-                    db.companyInformation.Add(item.Result);
+                    db.companyInformation.Add(item);
                 }
                 var count = db.SaveChanges();
-                Console.WriteLine("{0} records saved to database", count);
+                Console.WriteLine("{0} companies are saved to database", count);
             }
-#endif
-            using(var db = new DataContext())
+        }
+        static void Main(string[] args)
+        {
+            loadCompaniesInformation();
+            for(var i = 1; i < 31; i++)
             {
-
-                foreach(var company1 in db.companyInformation.OrderBy(x => x.companyName))
+                var filename = string.Format("C:\\software\\cygwin64\\home\\ksj\\tmp\\bhav\\cm{0:00}NOV2017bhav.csv", i);
+                if(!File.Exists(filename)) continue;
+                Console.WriteLine("Loading file {0}", filename);
+                var result = NseStockMarket.parseDailyStockDataFromCSV(filename);
+                using (var db = new DataContext())
                 {
-                    Console.WriteLine("{0} --> {1}", company1.companyName, company1.dateOfListing.Day);
+                    foreach(var item in result)
+                    {
+                        db.stockData.Add(item);
+                    }
+                    var count = db.SaveChanges();
+                    Console.WriteLine("{0} records saved to database", count);
                 }
-
-                var company = db.companyInformation.Where(x => x.isinNumber == "INE647O01011").ToList();
-                Console.WriteLine("Company : {0}", company[0].companyName);
             }
         }
     }
