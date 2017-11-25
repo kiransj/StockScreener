@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Collections.Generic;
+
 using TinyCsvParser;
 using TinyCsvParser.Mapping;
 
@@ -15,21 +14,6 @@ using TinyCsvParser.Mapping;
 
 namespace StockMarket
 {
-    public class CompanyInformation
-    {
-        [Required]
-        public string symbol {get; set;}
-        [Required]
-        public string companyName{get; set;}
-        [Required]
-        public string series{get; set;}
-        public DateTime dateOfListing{get; set;}
-        public float paidUpvalue {get; set;}
-        public int marketLot {get; set;}
-        [Required]
-        public string isinNumber{get; set;}
-        public float faceValue{get; set;}
-    }
 
     class CsvCompanyInformationMapping : CsvMapping<CompanyInformation>
     {
@@ -44,41 +28,6 @@ namespace StockMarket
             MapProperty(6, x => x.isinNumber);
             MapProperty(7, x => x.faceValue);
         }
-    }
-
-    public class DailyStockData
-    {
-        [Required]
-        public string symbol  {get; set;}
-        [Required]
-        public string series  {get; set;}
-        [Required]
-        public float open { get; set;}
-        [Required]
-        public float high { get; set;}
-        [Required]
-        public float low { get; set;}
-        [Required]
-        public float close { get; set;}
-        [Required]
-        public float lastPrice { get; set;}
-        [Required]
-        public float prevClose { get; set;}
-        [Required]
-        public long totalTradedQty { get; set;}
-        [Required]
-        public float totalTradedValue { get; set;}
-        [Required]
-        public DateTime date{get; set;}
-        [Required]
-        public long totalTrades { get; set;}
-        [Required]
-        public string isinNumber{get; set;}
-        [Required]
-        public long deliverableQty { get; set;}
-        [Required]
-        public float deliveryPercentage { get; set; }
-
     }
 
     class CsvDailyStockDataMapping : CsvMapping<DailyStockData>
@@ -107,8 +56,8 @@ namespace StockMarket
         public int record { get; set; }
         public int serialNumber { get; set; }
         public string symbol { get; set; }
-        public string series {get; set; }
-        public long qtyTraded { get; set;}
+        public string series { get; set; }
+        public long qtyTraded { get; set; }
         public long deliverableQty { get; set; }
         public float deliveryPercentage { get; set; }
     }
@@ -134,7 +83,7 @@ namespace StockMarket
             string filename = csvFile;
 
             // If the CSV file is empty then load the file from the nse website
-            if(csvFile == null)
+            if (csvFile == null)
             {
                 filename = Path.GetTempFileName();
                 WebClient client = new WebClient();
@@ -193,9 +142,9 @@ namespace StockMarket
             var stockPrices = NseStockMarket.parseBhavFile(bhavFile);
             var deliverablesQty = NseStockMarket.parseMTOFile(mtoFile);
 
-            foreach(var stock in stockPrices)
+            foreach (var stock in stockPrices)
             {
-                if(stock.series == "BE")
+                if (stock.series == "BE")
                 {
                     // In BE series all the trades will be delivered
                     stock.deliverableQty = stock.totalTradedQty;
@@ -205,7 +154,7 @@ namespace StockMarket
                 {
                     var results = deliverablesQty.Where(x => x.series == stock.series && x.symbol == stock.symbol && x.qtyTraded == stock.totalTradedQty).ToList();
 
-                    if(results.Count >= 1)
+                    if (results.Count >= 1)
                     {
                         var res = results.First();
                         stock.deliverableQty = res.deliverableQty;
@@ -215,6 +164,37 @@ namespace StockMarket
             }
 
             return stockPrices;
+        }
+
+        public static void loadCompaniesInformationToDB()
+        {
+            var result = NseStockMarket.parseListOfCompaniesFromCSV(@"data/nse.csv");
+
+            using (var db = new StockDataContext())
+            {
+                foreach (var item in result)
+                {
+                    db.companyInformation.Add(item);
+                }
+                var count = db.SaveChanges();
+                Console.WriteLine("{0} companies are saved to database", count);
+            }
+        }
+
+        // Populate the DB with closing price and deliverables for each
+        // BhavFile has the closing prices and deliverablesFile has the delivery Qty and Percentage for each stock
+        public static void loadDailyStockDataToDB(string bhavFile, string deliverablesFile)
+        {
+            var stockData = NseStockMarket.parseDailyStockInformation(bhavFile, deliverablesFile);
+            using (var db = new StockDataContext())
+            {
+                foreach (var stock in stockData)
+                {
+                    db.stockData.Add(stock);
+                }
+                var count = db.SaveChanges();
+                Console.WriteLine("{0} records saved to database", count);
+            }
         }
     }
 }
