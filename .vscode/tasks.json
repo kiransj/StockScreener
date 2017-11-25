@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "command": "dotnet",
+    "args": [],
+    "tasks": [
+        {
+            "taskName": "build",
+            "args": [
+                "${workspaceRoot}/screener.csproj"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "taskName": "run",
+            "args": [
+                "${workspaceRoot}/screener.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
