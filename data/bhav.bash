@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-for i in `seq 01 31` ;
+for i in `seq 30 30` ;
 do
     #download stock prices
     filename=$(printf "cm%02dNOV2017bhav.csv.zip" $i)
