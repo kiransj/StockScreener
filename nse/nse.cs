@@ -50,6 +50,15 @@ namespace StockMarket
         }
     }
 
+    class CsvCircuitBreakerDataMapping : CsvMapping<CircuitBreaker>
+    {
+        public CsvCircuitBreakerDataMapping(): base()
+        {
+            MapProperty(0, x => x.symbol);
+            MapProperty(1, x => x.series);
+            MapProperty(3, property: x => x.high_low);
+        }
+    }
 
     class DailyStockDeliveryPosition
     {
