@@ -19,6 +19,7 @@ namespace StockMarket
         public float faceValue { get; set; }
         public bool star { get; set; }
         public string notes { get; set; }
+        public string industry { get; set; }
     }
 
     public class CircuitBreaker
